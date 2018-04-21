@@ -64,7 +64,7 @@ int backtrack(int** board, int column ,int n){
 
 void solve(int n){
 	int** board = (int**) malloc(sizeof(int*)*n);
-	int i;
+	int i, j;
 	for(i = 0; i < n; i++){
 		*(board + i) = (int*)malloc(sizeof(int)*n);
 	}
@@ -83,7 +83,7 @@ int main(int argc, char const *argv[]){
 	printf("Welcome, this is the final project for advanced programming.\n");
 	printf("Ẃe are now going to use backtracking to solve the N Queens problem\n");
 	printf("How many queens are there in the board?\n");
-	scanf("%d", n);
+	scanf("%d", &n);
 
 	solve(n);
 

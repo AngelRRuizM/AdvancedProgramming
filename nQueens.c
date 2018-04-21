@@ -10,7 +10,7 @@ void printBoard(int** board, int n){
 				printf("Q ");
 			}
 			else{
-				printf("_ ");
+				printf("- ");
 			}
 		}
 		printf("\n");

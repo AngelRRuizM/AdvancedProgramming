@@ -1,10 +1,23 @@
 //Angel Roberto Ruiz Mendoza A01324489
-//Carlos Augusto Amador Manilla A0132
-//Monica Perez Martin A0132
+//Carlos Augusto Amador Manilla A01329447
+//Monica Perez Martin A01329619
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <semaphore.h>
+#include <signal.h>
+#include <time.h>
+#include <sys/time.h>
+
+pthread_t* threads;
+sem_t mutex;
+sem_t parent;
+int*ids;
+int*** boards;
+int n;
 
 /*
 * Method that prints the board, it transforms the 1s into Qs and 0s into -s
@@ -12,7 +25,7 @@
 *             n - Size of the board
 * Returns: Void
 */
-void printBoard(int** board, int n){
+void printBoard(int** board){
 	int i, j;
 	//To iterate the matrix
 	for(i = 0; i < n; i++){
@@ -39,7 +52,7 @@ void printBoard(int** board, int n){
 *             n - Size of the board
 * Returns: Int - one if there is a colition, 0 if there isn't
 */
-int checkColition(int** board, int row, int column, int n){
+int checkCollision(int** board, int row, int column){
 	int i, j;
 
 
@@ -75,17 +88,19 @@ int checkColition(int** board, int row, int column, int n){
 *             n - Size of the board
 * Returns: Int - one if the queen was placed, 0 if the queen cannot be placed
 */
-int backtrack(int** board, int column ,int n){
+int backtrack(int** board, int column){
 	//Check if you still have queens to place
+
 	if (column < n){
 		int i;
 		//Iterate all rows
-		for(i = 0; i < n; i++){
-			//If there would not be a collition you add a queen to that row
-			if(checkColition(board, i, column, n) == 0){
+		
+		for(i = 1; i < n; i++){
+			//If there would not be a Collision you add a queen to that row
+			if(checkCollision(board, i, column) == 0){
 				board[i][column] = 1;
 				//Do recurtion, if if returns 1 it means we are done
-				if( backtrack(board, column + 1, n) == 1)
+				if( backtrack(board, column + 1) == 1)
 					return 1;
 				//else, back track and continue to the next row
 				board[i][column] = 0;
@@ -101,44 +116,89 @@ int backtrack(int** board, int column ,int n){
 	
 }
 
+void* initThread(void*idptr){
+	int id = *(int*)(idptr);
+	
+	boards[id][0][id] = 1;
+	
+	if(backtrack(boards[id], 1) == 1){
+		sem_wait(&mutex);
+		printBoard(boards[id]);
+		sem_post(&parent);
+	}
+
+	pthread_exit(0);
+}
+
 /*
 * Method that initialize the board and calls the method to backtrack and to print the board
 * Parameters: n - Size of the board
 */
-void solve(int n){
+void solve(){
+	threads = (pthread_t*)malloc(sizeof(pthread_t)*n);
+	ids = (int*)malloc(sizeof(int)*n);
+	sem_init(&mutex, 0, 1);
+	sem_init(&parent, 0, 1);
+
+	sem_wait(&parent);
 	//Initialization oof the board
-	int** board = (int**) malloc(sizeof(int*)*n);
+	boards = (int***) malloc(sizeof(int**)*n);
 	int i, j;
+	
 	for(i = 0; i < n; i++){
-		*(board + i) = (int*)malloc(sizeof(int)*n);
-	}
-	//We set everything to 0, that means there is no queen there
-	for (i = 0; i < n; i++){
-		for(j = 0; j < n; j++){
-			board[i][j] = 0;
+		boards[i] = (int**)malloc(sizeof(int*)*n);
+		
+		for(int j=0; j<n; j++){
+			boards[i][j] = (int*)calloc(sizeof(int), n);
 		}
 	}
-	//Call method that retrieves the solution
-	backtrack(board, 0, n);
-	//Call method that prints the board
-	printBoard(board, n);
+
+	for(int i=0; i<n; i++){
+		ids[i] = i;
+		pthread_create(&threads[i], NULL, initThread, &ids[i]);
+        printf("New process started in the first line, place %d.\n", i);
+	}
+
+	sem_wait(&parent);
+
+	for(int i=0; i<n; i++){
+		ids[i] = i;
+		pthread_cancel(threads[i]);
+	}
+
+	sem_destroy(&parent);
+	sem_destroy(&mutex);
 }
 
+inline double my_clock(void) {
+  struct timeval t;
+  gettimeofday(&t, NULL);
+  return (1.0e-6*t.tv_usec + t.tv_sec);
+}
 
 /*
-* Method that welcomes the user, ask for the size of the board and calls teh method that solves it
-*/
+ * Method that welcomes the user, ask for the size of the board and calls teh method that solves it
+ */
 int main(int argc, char const *argv[]){
-
-	int n;
 	//Welcome
 	printf("Welcome, this is the final project for advanced programming.\n");
 	printf("Ẃe are now going to use backtracking to solve the N Queens problem\n");
 	printf("How many queens are there in the board?\n");
 	scanf("%d", &n);
 
+	struct timeval start, end;
+    long mtime, seconds, useconds;
+	gettimeofday(&start, NULL);
 	//Calls method that solves for n
-	solve(n);
+	solve();
+
+	gettimeofday(&end, NULL);
+	seconds  = end.tv_sec  - start.tv_sec;
+    useconds = end.tv_usec - start.tv_usec;
+
+    mtime = ((seconds) * 1000 + useconds/1000.0) + 0.5;
+
+    printf("Elapsed time: %lf seconds\n", (mtime*1.0)/1000);
 
 	return 0;
 }

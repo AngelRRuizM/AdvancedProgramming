@@ -14,70 +14,40 @@
 
 pthread_t* threads;
 sem_t mutex;
-sem_t parent;
+unsigned long long int count;
 int*ids;
 int*** boards;
 int n;
 
-/*
-* Method that prints the board, it transforms the 1s into Qs and 0s into -s
-* Parameters: board - A matrix that represents the n*n board in which the queens are placed
-*             n - Size of the board
-* Returns: Void
-*/
-void printBoard(int** board){
-	int i, j;
-	//To iterate the matrix
-	for(i = 0; i < n; i++){
-		for(j = 0; j < n; j++){
-			//If there is a queen print int
-			if(board[i][j] == 1){
-				printf("Q ");
-			}
-			//Else print a hyphen 
-			else{
-				printf("- ");
-			}
-		}
-		printf("\n");
-	}
+void markBoard(int**board, int x, int y){
+	board[x][y] = -1;
+
+	for(int j=y+1; j<n; j++)
+		board[x][j]++;
+	
+
+	for(int i=x+1, j=y+1; i<n && j<n ; i++, j++)
+		board[i][j]++;
+	
+	
+	for(int i=x-1, j=y+1; i>=0 && j<n; i--, j++)
+		board[i][j]++;
+	
 }
 
+void unmarkBoard(int** board, int x, int y){
+	board[x][y] = 0;
 
-/*
-* Method that checks if there wil be a colition when placing a queen in the board
-* Parameters: board - A matrix that represents the n*n board in which the queens are placed
-*			  row - The row where you will place the queen
-*			  column - The column where you will place the queen
-*             n - Size of the board
-* Returns: Int - one if there is a colition, 0 if there isn't
-*/
-int checkCollision(int** board, int row, int column){
-	int i, j;
+	for(int j=y+1; j<n; j++)
+		board[x][j]--;
+	
 
-
-	//Checks if there is a queen at the left side of the column
-	for(i = 0; i < column; i++){
-		if( board[row][i] == 1){
-			return 1;
-		}
-	}
-
-	//Checks if there is a queen in the left upper diagonal
-	for(i = row, j = column; i >= 0 && j >= 0; i--, j--){
-		if(board[i][j] == 1){
-			return 1;
-		}
-	}
-
-	//Checks lower left diagonal
-	for(i = row, j = column; j >= 0 && i < n; i++, j--){
-		if(board[i][j] == 1){
-			return 1;
-		}
-	}
-
-	return 0;
+	for(int i=x+1, j=y+1; i<n && j<n ; i++, j++)
+		board[i][j]--;
+	
+	
+	for(int i=x-1, j=y+1; i>=0 && j<n; i--, j++)
+		board[i][j]--;
 }
 
 /*
@@ -88,44 +58,40 @@ int checkCollision(int** board, int row, int column){
 *             n - Size of the board
 * Returns: Int - one if the queen was placed, 0 if the queen cannot be placed
 */
-int backtrack(int** board, int column){
-	//Check if you still have queens to place
+int backtracking(int** board, int queens, int x, int y){
+	if(queens == 0){
+		sem_wait(&mutex);
 
-	if (column < n){
-		int i;
-		//Iterate all rows
-		
-		for(i = 1; i < n; i++){
-			//If there would not be a Collision you add a queen to that row
-			if(checkCollision(board, i, column) == 0){
-				board[i][column] = 1;
-				//Do recurtion, if if returns 1 it means we are done
-				if( backtrack(board, column + 1) == 1)
-					return 1;
-				//else, back track and continue to the next row
-				board[i][column] = 0;
-			}
-		}
-		//If it checked all the rows and neither was a solution, return 0 to back track
+		count++;
+
+		sem_post(&mutex);
 		return 0;
 	}
-	//Base case, it placed all the queens!!!! Return 1 and finish
-	else{
-		return 1;
-	}
+		
+
+	if(x > n-1)
+		return 0;
 	
+
+	if(board[x][y] == 0){
+		markBoard(board, x, y);
+		if(backtracking(board, queens-1, 0, y+1) == 1)
+			return 1;
+		else{
+			unmarkBoard(board, x, y);
+			return backtracking(board, queens, x+1, y);
+		}
+	}
+	else
+		return backtracking(board, queens, x+1, y);
 }
 
 void* initThread(void*idptr){
 	int id = *(int*)(idptr);
 	
-	boards[id][0][id] = 1;
+	markBoard(boards[id], id, 0);
 	
-	if(backtrack(boards[id], 1) == 1){
-		sem_wait(&mutex);
-		printBoard(boards[id]);
-		sem_post(&parent);
-	}
+	backtracking(boards[id], n-1, 0, 1);
 
 	pthread_exit(0);
 }
@@ -137,10 +103,9 @@ void* initThread(void*idptr){
 void solve(){
 	threads = (pthread_t*)malloc(sizeof(pthread_t)*n);
 	ids = (int*)malloc(sizeof(int)*n);
+	count = 0;
 	sem_init(&mutex, 0, 1);
-	sem_init(&parent, 0, 1);
 
-	sem_wait(&parent);
 	//Initialization oof the board
 	boards = (int***) malloc(sizeof(int**)*n);
 	int i, j;
@@ -159,14 +124,13 @@ void solve(){
         printf("New process started in the first line, place %d.\n", i);
 	}
 
-	sem_wait(&parent);
 
 	for(int i=0; i<n; i++){
-		ids[i] = i;
-		pthread_cancel(threads[i]);
+		pthread_join(threads[i], NULL);
 	}
 
-	sem_destroy(&parent);
+	printf("Total possible solutions: %llu\n", count);
+
 	sem_destroy(&mutex);
 }
 
